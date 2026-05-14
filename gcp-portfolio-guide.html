@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GCP Portfolio Deployment Guide</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg2: #f7f6f3;
+    --bg3: #efede8;
+    --text: #1a1a18;
+    --text2: #5a5955;
+    --text3: #8a8880;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.2);
+    --accent: #1a6b4a;
+    --accent-bg: #e8f5ee;
+    --accent-text: #0f4530;
+    --blue: #1560a8;
+    --blue-bg: #e8f0fb;
+    --amber: #a05a00;
+    --amber-bg: #fdf3e0;
+    --purple: #4a38b0;
+    --purple-bg: #efedfe;
+    --red: #b02828;
+    --red-bg: #fdeaea;
+    --code-bg: #1e1e1e;
+    --code-text: #d4d4d4;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18;
+      --bg2: #222220;
+      --bg3: #2a2a28;
+      --text: #e8e6e0;
+      --text2: #a0a09a;
+      --text3: #6a6a64;
+      --border: rgba(255,255,255,0.1);
+      --border2: rgba(255,255,255,0.2);
+      --accent: #2da876;
+      --accent-bg: #0f3326;
+      --accent-text: #5ddba0;
+      --blue: #5090e0;
+      --blue-bg: #0a1e3a;
+      --amber: #e09030;
+      --amber-bg: #2a1a00;
+      --purple: #9080e8;
+      --purple-bg: #1a1240;
+      --red: #e05050;
+      --red-bg: #2a0a0a;
+      --code-bg: #141414;
+      --code-text: #d4d4d4;
+    }
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: 100vh;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    border-right: 0.5px solid var(--border);
+    padding: 24px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+
+  .sidebar-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 0 20px 12px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 20px;
+    font-size: 13px;
+    color: var(--text2);
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .nav-item:hover { background: var(--bg2); color: var(--text); }
+  .nav-item.active {
+    border-left-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-bg);
+    font-weight: 500;
+  }
+  .nav-item.done { color: var(--accent); }
+
+  .step-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .done .step-dot {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .done .step-dot::after { content: '✓'; }
+  .nav-item:not(.done) .step-dot { color: var(--text3); border-color: var(--text3); }
+
+  .cost-pill {
+    margin: 16px 20px 0;
+    background: var(--amber-bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  .cost-pill-label { color: var(--text3); margin-bottom: 2px; }
+  .cost-pill-value { color: var(--amber); font-weight: 600; font-size: 18px; }
+
+  /* Main content */
+  .main {
+    padding: 40px 48px;
+    max-width: 780px;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  h1 { font-size: 26px; font-weight: 600; margin-bottom: 6px; }
+  h2 { font-size: 18px; font-weight: 600; margin: 32px 0 12px; }
+  h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: var(--text2); }
+  p { margin-bottom: 12px; color: var(--text2); }
+  p strong { color: var(--text); font-weight: 500; }
+
+  .subtitle { font-size: 15px; color: var(--text3); margin-bottom: 24px; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .badge-free { background: var(--accent-bg); color: var(--accent-text); }
+  .badge-cost { background: var(--amber-bg); color: var(--amber); }
+  .badge-new { background: var(--purple-bg); color: var(--purple); }
+  .badge-gcp { background: var(--blue-bg); color: var(--blue); }
+
+  /* Callout boxes */
+  .callout {
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin: 16px 0;
+    border: 0.5px solid;
+    font-size: 14px;
+  }
+  .callout-tip { background: var(--accent-bg); border-color: var(--accent); color: var(--accent-text); }
+  .callout-warn { background: var(--amber-bg); border-color: var(--amber); color: var(--amber); }
+  .callout-info { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+  .callout-title { font-weight: 600; margin-bottom: 4px; }
+
+  /* Code blocks */
+  .code-block {
+    position: relative;
+    margin: 12px 0 20px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 0.5px solid var(--border);
+  }
+  .code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #2a2a28;
+    padding: 8px 14px;
+    font-size: 12px;
+    color: #888;
+  }
+  .code-header span { font-family: 'SF Mono', 'Fira Code', monospace; }
+  .copy-btn {
+    background: none;
+    border: 0.5px solid #555;
+    color: #aaa;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { background: #3a3a38; color: #ddd; }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 16px;
+    overflow-x: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 0;
+  }
+  code { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; }
+  p code, li code {
+    background: var(--bg3);
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 12.5px;
+    color: var(--text);
+  }
+
+  /* Steps within a section */
+  .steps-list { list-style: none; counter-reset: steps; }
+  .steps-list li {
+    counter-increment: steps;
+    padding: 12px 16px 12px 48px;
+    position: relative;
+    border-left: 0.5px solid var(--border);
+    margin-left: 16px;
+    margin-bottom: 4px;
+    font-size: 14px;
+    color: var(--text2);
+  }
+  .steps-list li::before {
+    content: counter(steps);
+    position: absolute;
+    left: -16px;
+    top: 10px;
+    width: 28px;
+    height: 28px;
+    background: var(--bg);
+    border: 1.5px solid var(--border2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+  }
+  .steps-list li strong { color: var(--text); }
+
+  /* Service cards */
+  .service-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .service-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  .service-card-name { font-weight: 500; font-size: 14px; margin-bottom: 4px; }
+  .service-card-desc { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+
+  /* Cost table */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 12px 0; }
+  th { text-align: left; padding: 10px 12px; border-bottom: 1.5px solid var(--border2); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3); }
+  td { padding: 10px 12px; border-bottom: 0.5px solid var(--border); color: var(--text2); }
+  tr:last-child td { border-bottom: none; }
+  .td-free { color: var(--accent); font-weight: 500; }
+  .td-total { color: var(--text); font-weight: 600; background: var(--bg2); }
+
+  /* Nav buttons */
+  .nav-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 0.5px solid var(--border);
+  }
+  .btn {
+    padding: 9px 20px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 0.5px solid var(--border2);
+    background: var(--bg2);
+    color: var(--text);
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .btn:hover { background: var(--bg3); }
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { opacity: 0.9; }
+
+  /* Progress bar */
+  .progress-bar {
+    height: 3px;
+    background: var(--bg3);
+    border-radius: 2px;
+    margin-bottom: 32px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 0.5px solid var(--border);
+    font-size: 14px;
+    color: var(--text2);
+    cursor: pointer;
+  }
+  .check-item input { margin-top: 2px; accent-color: var(--accent); }
+  .check-item.checked { color: var(--text3); text-decoration: line-through; }
+
+  .highlight-line { color: #6a9955; }
+  .highlight-key { color: #9cdcfe; }
+  .highlight-str { color: #ce9178; }
+  .highlight-num { color: #b5cea8; }
+  .highlight-cmd { color: #569cd6; }
+
+  @media (max-width: 700px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 24px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-title">Deployment guide</div>
+    <a class="nav-item active" onclick="goTo(0)" href="#">
+      <span class="step-dot" id="dot-0">0</span> Overview
+    </a>
+    <a class="nav-item" onclick="goTo(1)" href="#">
+      <span class="step-dot" id="dot-1">1</span> Setup GCP
+    </a>
+    <a class="nav-item" onclick="goTo(2)" href="#">
+      <span class="step-dot" id="dot-2">2</span> Portfolio site
+    </a>
+    <a class="nav-item" onclick="goTo(3)" href="#">
+      <span class="step-dot" id="dot-3">3</span> Firebase hosting
+    </a>
+    <a class="nav-item" onclick="goTo(4)" href="#">
+      <span class="step-dot" id="dot-4">4</span> Visitor counter
+    </a>
+    <a class="nav-item" onclick="goTo(5)" href="#">
+      <span class="step-dot" id="dot-5">5</span> Cloud Functions
+    </a>
+    <a class="nav-item" onclick="goTo(6)" href="#">
+      <span class="step-dot" id="dot-6">6</span> CI/CD pipeline
+    </a>
+    <a class="nav-item" onclick="goTo(7)" href="#">
+      <span class="step-dot" id="dot-7">7</span> AI chatbot
+    </a>
+    <a class="nav-item" onclick="goTo(8)" href="#">
+      <span class="step-dot" id="dot-8">8</span> Voice agent
+    </a>
+    <a class="nav-item" onclick="goTo(9)" href="#">
+      <span class="step-dot" id="dot-9">9</span> Demo checklist
+    </a>
+
+    <div class="cost-pill">
+      <div class="cost-pill-label">Estimated total cost</div>
+      <div class="cost-pill-value">~$0.10</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px;">for 1 week of demo</div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- Page 0: Overview -->
+    <div class="page active" id="page-0">
+      <h1>GCP tech portfolio — full deployment guide</h1>
+      <p class="subtitle">Cloud Resume Challenge · No Terraform · Beginner-friendly · $5 budget</p>
+
+      <div class="progress-bar"><div class="progress-fill" style="width:5%"></div></div>
+
+      <p>This guide walks you through deploying a complete tech portfolio on Google Cloud Platform — with a live visitor counter, a Gemini-powered AI chatbot, and a voice agent — all for under $0.10/week using free tiers.</p>
+
+      <h2>What you're building</h2>
+      <div class="service-grid">
+        <div class="service-card">
+          <div class="service-card-name">Portfolio site</div>
+          <div class="service-card-desc">HTML/CSS hosted on Firebase</div>
+          <span class="badge badge-free">Free</span>
+        </div>
+        <div class="service-card">
+          <div class="service-card-name">Visitor counter</div>
+          <div class="service-card-desc">JS + Cloud Functions + Firestore</div>
+          <span class="badge badge-free">Free tier</span>
+        </div>
+        <div class="service-card">
+          <div class="service-card-name">CI/CD pipeline</div>
+          <div class="service-card-desc">GitHub Actions auto-deploy</div>
+          <span class="badge badge-free">Free</span>
+        </div>
+        <div class="service-card">
+          <div class="service-card-name">AI chatbot</div>
+          <div class="service-card-desc">Vertex AI Agent Builder (Gemini)</div>
+          <span class="badge badge-gcp">GCP native</span>
+        </div>
+        <div class="service-card">
+          <div class="service-card-name">Voice agent</div>
+          <div class="service-card-desc">Dialogflow Messenger + Cloud TTS</div>
+          <span class="badge badge-new">Showstopper</span>
+        </div>
+      </div>
+
+      <h2>Architecture (no Terraform, no Load Balancer)</h2>
+      <p>Everything is deployed via CLI commands and the GCP Console. Two GitHub repos, one for frontend and one for backend, each with their own GitHub Actions workflow.</p>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">Why skip the Load Balancer?</div>
+        A GCP Load Balancer costs ~$0.60/day ($4.20/week) — nearly your entire $5 budget. Firebase Hosting is actually backed by Google Cloud Storage and gives you free HTTPS + global CDN + a clean <code>.web.app</code> URL. For a beginner demo, it's the right call.
+      </div>
+
+      <h2>What you need before starting</h2>
+      <ul class="steps-list">
+        <li>A Google account with $5 GCP credits activated</li>
+        <li><strong>gcloud CLI</strong> installed — <code>brew install google-cloud-sdk</code> on Mac, or download from cloud.google.com/sdk</li>
+        <li><strong>Node.js</strong> installed (for Firebase CLI) — <code>brew install node</code></li>
+        <li>A <strong>GitHub account</strong> with two new empty repos: <code>portfolio-frontend</code> and <code>portfolio-backend</code></li>
+        <li>Python 3.11 installed (for Cloud Functions)</li>
+        <li>A text editor (VS Code recommended)</li>
+      </ul>
+
+      <div class="nav-buttons">
+        <button class="btn btn-primary" onclick="goTo(1)">Start: Setup GCP →</button>
+      </div>
+    </div>
+
+    <!-- Page 1: Setup GCP -->
+    <div class="page" id="page-1">
+      <h1>Step 1 — Set up GCP project</h1>
+      <p class="subtitle">~10 minutes · One-time setup</p>
+      <div class="progress-bar"><div class="progress-fill" style="width:15%"></div></div>
+
+      <p>Everything in GCP lives inside a <strong>project</strong>. Think of it as a folder that groups all your services and tracks costs together.</p>
+
+      <h2>1.1 Login and create project</h2>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre># Login to Google Cloud
+gcloud auth login
+
+# Create a new project (change the name to something unique)
+gcloud projects create hafsa-portfolio-gcp --name="Hafsa Portfolio"
+
+# Set this as your active project
+gcloud config set project hafsa-portfolio-gcp
+
+# Check your billing account ID (you'll need this)
+gcloud billing accounts list</pre>
+      </div>
+
+      <h2>1.2 Link billing and enable APIs</h2>
+      <p>Copy the <code>ACCOUNT_ID</code> from the command above (looks like <code>01A2B3-CD4E56-789F0A</code>), then run:</p>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre># Link your billing account (paste your actual ID)
+gcloud billing projects link hafsa-portfolio-gcp \
+  --billing-account=YOUR_BILLING_ACCOUNT_ID
+
+# Enable all the services you'll use
+gcloud services enable \
+  cloudfunctions.googleapis.com \
+  cloudbuild.googleapis.com \
+  firestore.googleapis.com \
+  run.googleapis.com \
+  dialogflow.googleapis.com \
+  texttospeech.googleapis.com</pre>
+      </div>
+
+      <div class="callout callout-info">
+        <div class="callout-title">This takes about 2 minutes</div>
+        Each API needs to be enabled before you can use it. You only do this once per project.
+      </div>
+
+      <h2>1.3 Create Firestore database</h2>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre># Create Firestore in Native mode (choose region closest to Pakistan)
+# asia-south1 = Mumbai, best for Pakistan
+gcloud firestore databases create --location=asia-south1</pre>
+      </div>
+
+      <p>Go to <strong>console.cloud.google.com → Firestore</strong> and create:</p>
+      <ul class="steps-list">
+        <li>Collection: <code>visitors</code></li>
+        <li>Document ID: <code>counter</code></li>
+        <li>Field: <code>count</code> (Number) = <code>0</code></li>
+      </ul>
+
+      <div class="nav-buttons">
+        <button class="btn" onclick="goTo(0)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(2)">Next: Portfolio site →</button>
+      </div>
+    </div>
+
+    <!-- Page 2: Portfolio site -->
+    <div class="page" id="page-2">
+      <h1>Step 2 — Build the portfolio site</h1>
+      <p class="subtitle">~20 minutes · HTML + CSS</p>
+      <div class="progress-bar"><div class="progress-fill" style="width:25%"></div></div>
+
+      <p>Your portfolio is a static HTML/CSS site. Here's a clean structure to start with — customize it with your own content.</p>
+
+      <h2>Folder structure</h2>
+      <div class="code-block">
+        <div class="code-header"><span>your portfolio-frontend folder</span></div>
+        <pre>portfolio-frontend/
+├── index.html
+├── style.css
+├── counter.js        ← visitor counter (added in Step 4)
+├── .github/
+│   └── workflows/
+│       └── deploy.yml  ← CI/CD (added in Step 6)
+└── firebase.json     ← Firebase config (added in Step 3)</pre>
+      </div>
+
+      <h2>index.html</h2>
+      <div class="code-block">
+        <div class="code-header"><span>index.html</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
+  &lt;title&gt;Hafsa | Cloud &amp; Solutions Architect&lt;/title&gt;
+  &lt;link rel="stylesheet" href="style.css"&gt;
+&lt;/head&gt;
+&lt;body&gt;
+
+  &lt;header&gt;
+    &lt;h1&gt;Hafsa&lt;/h1&gt;
+    &lt;p class="tagline"&gt;Cloud &amp; Solutions Architect · AWS Certified · GCP&lt;/p&gt;
+    &lt;p class="visitor-count"&gt;
+      Visitors: &lt;span id="count"&gt;...&lt;/span&gt;
+    &lt;/p&gt;
+  &lt;/header&gt;
+
+  &lt;section id="about"&gt;
+    &lt;h2&gt;About&lt;/h2&gt;
+    &lt;p&gt;Computer Systems Engineering graduate, UET Peshawar.
+    AWS Cloud Club Captain · Microsoft Learn Student Ambassador Lead.
+    Specializing in cloud architecture and data engineering.&lt;/p&gt;
+  &lt;/section&gt;
+
+  &lt;section id="certifications"&gt;
+    &lt;h2&gt;Certifications&lt;/h2&gt;
+    &lt;ul&gt;
+      &lt;li&gt;AWS Cloud Practitioner&lt;/li&gt;
+      &lt;li&gt;GCP Cloud Digital Leader (in progress)&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/section&gt;
+
+  &lt;section id="projects"&gt;
+    &lt;h2&gt;Featured Projects&lt;/h2&gt;
+    &lt;div class="project-card"&gt;
+      &lt;h3&gt;Quantum-Classical Portfolio Optimization&lt;/h3&gt;
+      &lt;p&gt;FYP: Hybrid quantum + classical optimizer for stock portfolios
+      using ARIMAX/GARCH forecasting, deployed on Azure Functions.&lt;/p&gt;
+      &lt;span class="tag"&gt;Azure&lt;/span&gt;
+      &lt;span class="tag"&gt;Python&lt;/span&gt;
+      &lt;span class="tag"&gt;XGBoost&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class="project-card"&gt;
+      &lt;h3&gt;This Portfolio&lt;/h3&gt;
+      &lt;p&gt;Deployed on GCP with CI/CD, AI chatbot, and voice agent.&lt;/p&gt;
+      &lt;span class="tag"&gt;GCP&lt;/span&gt;
+      &lt;span class="tag"&gt;Firebase&lt;/span&gt;
+      &lt;span class="tag"&gt;Vertex AI&lt;/span&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;!-- Visitor counter script --&gt;
+  &lt;script src="counter.js"&gt;&lt;/script&gt;
+
+  &lt;!-- Dialogflow Messenger (chatbot + voice) - added in Step 7 --&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;</pre>
+      </div>
+
+      <h2>style.css — minimal clean styles</h2>
+      <div class="code-block">
+        <div class="code-header"><span>style.css</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  color: #1a1a1a;
+  line-height: 1.7;
+}
+header {
+  margin-bottom: 48px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 24px;
+}
+h1 { font-size: 36px; font-weight: 700; }
+h2 { font-size: 20px; margin: 32px 0 12px; }
+h3 { font-size: 16px; margin-bottom: 8px; }
+.tagline { color: #666; font-size: 16px; margin-top: 6px; }
+.visitor-count {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #999;
+  background: #f5f5f5;
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+section { margin-bottom: 40px; }
+.project-card {
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.tag {
+  display: inline-block;
+  background: #e8f5ee;
+  color: #0f6e56;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin: 8px 4px 0 0;
+}</pre>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn" onclick="goTo(1)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(3)">Next: Firebase hosting →</button>
+      </div>
+    </div>
+
+    <!-- Page 3: Firebase Hosting -->
+    <div class="page" id="page-3">
+      <h1>Step 3 — Deploy to Firebase Hosting</h1>
+      <p class="subtitle">~15 minutes · Free HTTPS + CDN</p>
+      <div class="progress-bar"><div class="progress-fill" style="width:35%"></div></div>
+
+      <p>Firebase Hosting gives you free HTTPS, a global CDN, and a <code>.web.app</code> URL — no Load Balancer needed.</p>
+
+      <h2>3.1 Install Firebase CLI and login</h2>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>npm install -g firebase-tools
+firebase login</pre>
+      </div>
+
+      <h2>3.2 Initialize Firebase in your frontend folder</h2>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>cd portfolio-frontend
+firebase init hosting</pre>
+      </div>
+
+      <p>When prompted:</p>
+      <ul class="steps-list">
+        <li>Select <strong>Use an existing project</strong> → choose <code>hafsa-portfolio-gcp</code></li>
+        <li>Public directory: <strong>.</strong> (just a dot — deploy the current folder)</li>
+        <li>Configure as single-page app? <strong>No</strong></li>
+        <li>Overwrite index.html? <strong>No</strong></li>
+      </ul>
+
+      <h2>3.3 Create firebase.json</h2>
+      <div class="code-block">
+        <div class="code-header"><span>firebase.json</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      ".github/**",
+      "node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=3600, s-maxage=86400"
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+      </div>
+
+      <h2>3.4 Deploy!</h2>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>firebase deploy --only hosting</pre>
+      </div>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">Your site is live!</div>
+        Firebase gives you a URL like <code>hafsa-portfolio-gcp.web.app</code>. Open it in your browser — your portfolio is live with HTTPS, on Google's global CDN, for free.
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn" onclick="goTo(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(4)">Next: Visitor counter →</button>
+      </div>
+    </div>
+
+    <!-- Page 4: Visitor counter -->
+    <div class="page" id="page-4">
+      <h1>Step 4 — Visitor counter (Firestore + JS)</h1>
+      <p class="subtitle">~15 minutes · Shows live visitor count</p>
+      <div class="progress-bar"><div class="progress-fill" style="width:45%"></div></div>
+
+      <p>The visitor counter calls your Cloud Function (built next), which reads and writes to Firestore. The JS in your HTML fetches the count and displays it.</p>
+
+      <h2>counter.js — fetch the count from your API</h2>
+      <div class="code-block">
+        <div class="code-header"><span>portfolio-frontend/counter.js</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>// Replace this URL after you deploy the Cloud Function in Step 5
+const FUNCTION_URL =
+  'https://asia-south1-hafsa-portfolio-gcp.cloudfunctions.net/visitor-counter';
+
+async function updateVisitorCount() {
+  try {
+    const response = await fetch(FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) throw new Error('API call failed');
+
+    const data = await response.json();
+    const countEl = document.getElementById('count');
+    if (countEl) countEl.textContent = data.count.toLocaleString();
+
+  } catch (error) {
+    console.error('Could not fetch visitor count:', error);
+    const countEl = document.getElementById('count');
+    if (countEl) countEl.textContent = '—';
+  }
+}
+
+// Run when page loads
+document.addEventListener('DOMContentLoaded', updateVisitorCount);</pre>
+      </div>
+
+      <div class="callout callout-warn">
+        <div class="callout-title">Note</div>
+        The <code>FUNCTION_URL</code> will be blank until Step 5. Deploy the Cloud Function first, get the URL, then paste it here and redeploy the frontend.
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn" onclick="goTo(3)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(5)">Next: Cloud Functions →</button>
+      </div>
+    </div>
+
+    <!-- Page 5: Cloud Functions -->
+    <div class="page" id="page-5">
+      <h1>Step 5 — Cloud Functions (Python API)</h1>
+      <p class="subtitle">~20 minutes · Serverless backend</p>
+      <div class="progress-bar"><div class="progress-fill" style="width:55%"></div></div>
+
+      <p>Cloud Functions is serverless Python — you write a function, deploy it, and Google runs it on demand. Free tier covers 2 million requests per month.</p>
+
+      <h2>5.1 Create the backend folder</h2>
+      <div class="code-block">
+        <div class="code-header"><span>portfolio-backend/ folder structure</span></div>
+        <pre>portfolio-backend/
+├── main.py           ← your Cloud Function
+├── requirements.txt  ← Python dependencies
+└── test_main.py      ← unit tests (required by challenge)</pre>
+      </div>
+
+      <h2>5.2 main.py — the visitor counter function</h2>
+      <div class="code-block">
+        <div class="code-header"><span>portfolio-backend/main.py</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>import functions_framework
+from google.cloud import firestore
+from flask import jsonify
+
+# Create Firestore client (uses your project automatically)
+db = firestore.Client()
+
+@functions_framework.http
+def visitor_counter(request):
+    """Increments visitor count in Firestore and returns the new count."""
+
+    # Handle CORS so your website can call this function
+    cors_headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+    }
+
+    # Browser sends OPTIONS first (a preflight check) — just say OK
+    if request.method == 'OPTIONS':
+        return ('', 204, cors_headers)
+
+    # Get the counter document from Firestore
+    doc_ref = db.collection('visitors').document('counter')
+    doc = doc_ref.get()
+
+    if doc.exists:
+        current_count = doc.to_dict().get('count', 0)
+        new_count = current_count + 1
+    else:
+        new_count = 1
+
+    # Save the updated count back to Firestore
+    doc_ref.set({'count': new_count})
+
+    return jsonify({'count': new_count}), 200, cors_headers</pre>
+      </div>
+
+      <h2>5.3 requirements.txt</h2>
+      <div class="code-block">
+        <div class="code-header"><span>portfolio-backend/requirements.txt</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>functions-framework==3.*
+google-cloud-firestore==2.*</pre>
+      </div>
+
+      <h2>5.4 test_main.py — unit tests</h2>
+      <p>The Cloud Resume Challenge requires tests. Here's a simple but real test suite:</p>
+      <div class="code-block">
+        <div class="code-header"><span>portfolio-backend/test_main.py</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>import unittest
+from unittest.mock import patch, MagicMock
+import main
+
+class TestVisitorCounter(unittest.TestCase):
+
+    @patch('main.db')
+    def test_increments_existing_count(self, mock_db):
+        """When document exists, count should go up by 1."""
+        mock_doc = MagicMock()
+        mock_doc.exists = True
+        mock_doc.to_dict.return_value = {'count': 42}
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+
+        request = MagicMock()
+        request.method = 'POST'
+
+        response = main.visitor_counter(request)
+        response_data = response[0].get_json()
+
+        self.assertEqual(response_data['count'], 43)
+
+    @patch('main.db')
+    def test_starts_at_one_when_no_document(self, mock_db):
+        """When no document exists yet, count starts at 1."""
+        mock_doc = MagicMock()
+        mock_doc.exists = False
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+
+        request = MagicMock()
+        request.method = 'POST'
+
+        response = main.visitor_counter(request)
+        response_data = response[0].get_json()
+
+        self.assertEqual(response_data['count'], 1)
+
+    @patch('main.db')
+    def test_handles_preflight_cors(self, mock_db):
+        """OPTIONS request (CORS preflight) should return 204."""
+        request = MagicMock()
+        request.method = 'OPTIONS'
+
+        response = main.visitor_counter(request)
+
+        self.assertEqual(response[1], 204)
+
+if __name__ == '__main__':
+    unittest.main()</pre>
+      </div>
+
+      <h2>5.5 Run tests locally first</h2>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>cd portfolio-backend
+pip install functions-framework google-cloud-firestore
+python -m pytest test_main.py -v</pre>
+      </div>
+
+      <h2>5.6 Deploy the function</h2>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>gcloud functions deploy visitor-counter \
+  --gen2 \
+  --runtime=python311 \
+  --region=asia-south1 \
+  --source=. \
+  --entry-point=visitor_counter \
+  --trigger-http \
+  --allow-unauthenticated \
+  --max-instances=5</pre>
+      </div>
+
+      <p>After deploying, copy the <strong>URL</strong> shown in the output (looks like <code>https://asia-south1-hafsa-portfolio-gcp.cloudfunctions.net/visitor-counter</code>) and paste it into <code>counter.js</code> in your frontend.</p>
+
+      <div class="nav-buttons">
+        <button class="btn" onclick="goTo(4)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(6)">Next: CI/CD →</button>
+      </div>
+    </div>
+
+    <!-- Page 6: CI/CD -->
+    <div class="page" id="page-6">
+      <h1>Step 6 — CI/CD with GitHub Actions</h1>
+      <p class="subtitle">~20 minutes · Auto-deploy on every push</p>
+      <div class="progress-bar"><div class="progress-fill" style="width:65%"></div></div>
+
+      <p>CI/CD means: whenever you push code to GitHub, it automatically tests and deploys for you. No manual commands needed after this step.</p>
+
+      <h2>How it works</h2>
+      <ul class="steps-list">
+        <li>You push to <code>portfolio-backend</code> → GitHub Actions runs your Python tests → if tests pass, deploys to Cloud Functions</li>
+        <li>You push to <code>portfolio-frontend</code> → GitHub Actions deploys to Firebase Hosting</li>
+      </ul>
+
+      <h2>6.1 Create a GCP service account for GitHub</h2>
+      <p>GitHub Actions needs permission to deploy to your GCP project. We create a "service account" — like a robot user with limited permissions.</p>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre># Create the service account
+gcloud iam service-accounts create github-deployer \
+  --display-name="GitHub Actions Deployer"
+
+# Give it permission to deploy Cloud Functions
+gcloud projects add-iam-policy-binding hafsa-portfolio-gcp \
+  --member="serviceAccount:github-deployer@hafsa-portfolio-gcp.iam.gserviceaccount.com" \
+  --role="roles/cloudfunctions.developer"
+
+# Also allow it to use the App Engine default service account
+gcloud iam service-accounts add-iam-policy-binding \
+  hafsa-portfolio-gcp@appspot.gserviceaccount.com \
+  --member="serviceAccount:github-deployer@hafsa-portfolio-gcp.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser"
+
+# Download a key file for this service account
+gcloud iam service-accounts keys create github-key.json \
+  --iam-account=github-deployer@hafsa-portfolio-gcp.iam.gserviceaccount.com</pre>
+      </div>
+
+      <div class="callout callout-warn">
+        <div class="callout-title">Never commit github-key.json to Git!</div>
+        Add it to your <code>.gitignore</code> immediately. We'll paste its contents as a GitHub secret instead.
+      </div>
+
+      <div class="code-block">
+        <div class="code-header"><span>terminal — add to .gitignore</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>echo "github-key.json" >> .gitignore</pre>
+      </div>
+
+      <h2>6.2 Add secrets to GitHub</h2>
+      <p>Go to each GitHub repo → <strong>Settings → Secrets and variables → Actions → New repository secret</strong></p>
+      <ul class="steps-list">
+        <li>In <code>portfolio-backend</code>: add secret <code>GCP_SA_KEY</code> = paste the entire contents of <code>github-key.json</code></li>
+        <li>In <code>portfolio-frontend</code>: add secret <code>GCP_SA_KEY</code> = same key. Also add <code>FIREBASE_TOKEN</code> = output of <code>firebase login:ci</code></li>
+      </ul>
+
+      <h2>6.3 Backend CI/CD workflow</h2>
+      <div class="code-block">
+        <div class="code-header"><span>portfolio-backend/.github/workflows/deploy.yml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>name: Deploy backend
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Download your code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: pip install functions-framework google-cloud-firestore pytest
+
+      # 4. Run tests — if any test fails, deployment stops here
+      - name: Run tests
+        run: python -m pytest test_main.py -v
+
+      # 5. Login to GCP using the secret key
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # 6. Deploy to Cloud Functions
+      - name: Deploy Cloud Function
+        uses: google-github-actions/deploy-cloud-functions@v2
+        with:
+          name: visitor-counter
+          runtime: python311
+          region: asia-south1
+          entry_point: visitor_counter</pre>
+      </div>
+
+      <h2>6.4 Frontend CI/CD workflow</h2>
+      <div class="code-block">
+        <div class="code-header"><span>portfolio-frontend/.github/workflows/deploy.yml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>name: Deploy frontend
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy to Firebase Hosting
+        run: firebase deploy --only hosting --token ${{ secrets.FIREBASE_TOKEN }}
+        env:
+          FIREBASE_CLI_EXPERIMENTS: webframeworks</pre>
+      </div>
+
+      <h2>6.5 Test it</h2>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre># Commit and push your backend
+cd portfolio-backend
+git add .
+git commit -m "Add visitor counter Cloud Function"
+git push origin main
+
+# Watch it deploy automatically at:
+# github.com/YOUR_USERNAME/portfolio-backend/actions</pre>
+      </div>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">This is the CI/CD demo moment</div>
+        During your presentation, make a small edit (change a word in index.html), push to GitHub, then show the audience the GitHub Actions tab auto-deploying. Takes ~90 seconds and always impresses.
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn" onclick="goTo(5)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(7)">Next: AI chatbot →</button>
+      </div>
+    </div>
+
+    <!-- Page 7: AI Chatbot -->
+    <div class="page" id="page-7">
+      <h1>Step 7 — AI chatbot with Vertex AI Agent Builder</h1>
+      <p class="subtitle">~25 minutes · Gemini-powered, GCP-native</p>
+      <div class="progress-bar"><div class="progress-fill" style="width:75%"></div></div>
+
+      <div class="callout callout-info">
+        <div class="callout-title">What is Vertex AI Agent Builder?</div>
+        It's Google's platform for building AI agents powered by Gemini. You give it information about yourself, and it creates a chatbot that can answer any question about you — without you writing any ML code. It uses RAG (Retrieval-Augmented Generation) to ground answers in your actual data.
+      </div>
+
+      <h2>7.1 Create a data store (your portfolio content)</h2>
+      <ul class="steps-list">
+        <li>Go to <strong>console.cloud.google.com → Vertex AI → Agent Builder</strong></li>
+        <li>Click <strong>Create data store</strong></li>
+        <li>Choose <strong>Website</strong> if your LinkedIn is public, OR choose <strong>Cloud Storage</strong> to upload a document</li>
+        <li>If using a document: create a file called <code>portfolio-info.txt</code> with everything about yourself (see template below), upload it to a GCS bucket, and link that bucket</li>
+        <li>Name the data store: <code>portfolio-knowledge</code></li>
+        <li>Wait ~5 minutes for indexing</li>
+      </ul>
+
+      <h2>portfolio-info.txt — paste your info here</h2>
+      <div class="code-block">
+        <div class="code-header"><span>portfolio-info.txt (customize this)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>Name: Hafsa
+Role: Cloud and Solutions Architecture Engineer
+Education: Computer Systems Engineering, UET Peshawar (final year)
+
+Certifications:
+- AWS Cloud Practitioner
+- GCP Cloud Digital Leader (in progress)
+
+Leadership Roles:
+- AWS Cloud Club Captain
+- Microsoft Learn Student Ambassador Lead
+- Community Manager at AtomCamp
+- Data Engineering Instructor (weekend course)
+
+Featured Projects:
+1. Quantum-Classical Portfolio Optimization (FYP)
+   - Built a hybrid quantum + classical stock portfolio optimizer
+   - Uses ARIMAX/GARCH forecasting + XGBoost pre-selection
+   - Deployed on Azure Functions with Blob Storage
+   - Stack: Python, Azure ML, FinBERT, SLSQP, simulated annealing
+
+2. GCP Tech Portfolio (this website)
+   - Deployed using Firebase Hosting, Cloud Functions, Firestore
+   - CI/CD with GitHub Actions
+   - AI chatbot powered by Vertex AI Agent Builder
+   - Voice agent using Dialogflow Messenger + Cloud TTS
+
+Skills: AWS, Azure, GCP, Python, Cloud Functions, Firestore,
+Docker, SQL, data engineering, machine learning, portfolio optimization
+
+Contact: [your LinkedIn or email]</pre>
+      </div>
+
+      <h2>7.2 Create the AI agent</h2>
+      <ul class="steps-list">
+        <li>In Agent Builder → <strong>Create app</strong> → choose <strong>Chat</strong></li>
+        <li>Name it: <code>Portfolio Assistant</code></li>
+        <li>Link the data store you just created (<code>portfolio-knowledge</code>)</li>
+        <li>In <strong>Agent settings</strong> → set this system prompt:</li>
+      </ul>
+
+      <div class="code-block">
+        <div class="code-header"><span>Agent system prompt</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>You are a helpful portfolio assistant for Hafsa, a cloud and solutions
+architecture engineer. Your job is to answer questions from visitors
+about Hafsa's experience, projects, skills, and background.
+
+Be friendly, concise, and professional. Only answer based on the
+information in the knowledge base. If you don't know something,
+say so honestly and suggest the visitor contact Hafsa directly.
+
+Do not make up certifications, projects, or experience that is not
+in the knowledge base.</pre>
+      </div>
+
+      <ul class="steps-list">
+        <li>Click <strong>Save</strong>, then <strong>Preview</strong> the agent — try asking "What projects has Hafsa worked on?" to verify it works</li>
+        <li>Go to <strong>Integrations → Dialogflow Messenger</strong></li>
+        <li>Enable the integration and copy the two lines of embed code</li>
+      </ul>
+
+      <h2>7.3 Add the chatbot to your portfolio</h2>
+      <p>Paste the embed code from Dialogflow Messenger just before <code>&lt;/body&gt;</code> in your <code>index.html</code>:</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>index.html — add before &lt;/body&gt;</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>&lt;!-- Paste YOUR embed code from Dialogflow Messenger here --&gt;
+&lt;link rel="stylesheet"
+  href="https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/themes/df-messenger-default.css"&gt;
+&lt;script src="https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/df-messenger.js"&gt;&lt;/script&gt;
+
+&lt;df-messenger
+  project-id="hafsa-portfolio-gcp"
+  agent-id="YOUR_AGENT_ID_FROM_CONSOLE"
+  language-code="en"
+  max-query-length="-1"&gt;
+  &lt;df-messenger-chat-bubble
+    chat-title="Ask about Hafsa"
+    chat-icon="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/smart_toy/default/24px.svg"&gt;
+  &lt;/df-messenger-chat-bubble&gt;
+&lt;/df-messenger&gt;
+
+&lt;style&gt;
+  df-messenger {
+    z-index: 999;
+    position: fixed;
+    --df-messenger-font-color: #000;
+    --df-messenger-font-family: 'Segoe UI', system-ui;
+    --df-messenger-chat-background: #f3f6fc;
+    --df-messenger-message-user-background: #d3e3fd;
+    --df-messenger-message-bot-background: #fff;
+    bottom: 24px;
+    right: 24px;
+  }
+&lt;/style&gt;</pre>
+      </div>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">You now have a working AI chatbot!</div>
+        A blue chat bubble appears in the bottom-right of your portfolio. Visitors can type any question and your Gemini-powered agent answers based on your portfolio info. No ML code, no model training, all GCP-native.
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn" onclick="goTo(6)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(8)">Next: Voice agent →</button>
+      </div>
+    </div>
+
+    <!-- Page 8: Voice agent -->
+    <div class="page" id="page-8">
+      <h1>Step 8 — Voice agent (Dialogflow Messenger + Cloud TTS)</h1>
+      <p class="subtitle">~15 minutes · The showstopper feature</p>
+      <div class="progress-bar"><div class="progress-fill" style="width:87%"></div></div>
+
+      <div class="callout callout-info">
+        <div class="callout-title">How GCP voice works</div>
+        Dialogflow Messenger has a built-in voice mode. When a visitor clicks the mic, the browser captures their voice (using the Web Speech API), sends it as text to your agent, and the response is read aloud using Cloud Text-to-Speech. All of this is built into the same widget you embedded in Step 7 — you just need to enable it.
+      </div>
+
+      <h2>8.1 Enable voice in Dialogflow Messenger</h2>
+      <ul class="steps-list">
+        <li>Go to <strong>Agent Builder → your agent → Integrations → Dialogflow Messenger</strong></li>
+        <li>Toggle on <strong>Allow speech</strong></li>
+        <li>Under <strong>Text-to-speech voice</strong>, select a high-quality neural voice — recommended: <code>en-US-Neural2-F</code> (clear, professional female voice) or <code>en-US-Chirp3-HD-Aoede</code> (HD quality)</li>
+        <li>Click <strong>Save</strong></li>
+      </ul>
+
+      <h2>8.2 Update your embed code to show the mic button</h2>
+      <div class="code-block">
+        <div class="code-header"><span>index.html — updated df-messenger tag</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre>&lt;df-messenger
+  project-id="hafsa-portfolio-gcp"
+  agent-id="YOUR_AGENT_ID"
+  language-code="en"
+  max-query-length="-1"&gt;
+  &lt;df-messenger-chat-bubble
+    chat-title="Ask about Hafsa"
+    chat-icon="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/smart_toy/default/24px.svg"&gt;
+  &lt;/df-messenger-chat-bubble&gt;
+&lt;/df-messenger&gt;
+
+&lt;style&gt;
+  df-messenger {
+    z-index: 999;
+    position: fixed;
+    --df-messenger-font-color: #000;
+    --df-messenger-font-family: 'Segoe UI', system-ui;
+    --df-messenger-chat-background: #f3f6fc;
+    --df-messenger-message-user-background: #d3e3fd;
+    --df-messenger-message-bot-background: #fff;
+    bottom: 24px;
+    right: 24px;
+  }
+  /* Show microphone button inside the chat input */
+  df-messenger-chat-bubble {
+    --df-messenger-send-icon: url("...");
+  }
+&lt;/style&gt;</pre>
+      </div>
+
+      <div class="callout callout-warn">
+        <div class="callout-title">Microphone access</div>
+        Visitors must grant microphone permission in their browser. This only works over HTTPS (which Firebase Hosting provides). It won't work on plain http:// localhost during testing.
+      </div>
+
+      <h2>8.3 Test voice locally with ngrok</h2>
+      <p>To test voice on localhost (which needs HTTPS), use ngrok to get a temporary HTTPS URL:</p>
+      <div class="code-block">
+        <div class="code-header"><span>terminal</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre># Install ngrok from ngrok.com, then:
+npx serve .         # serve your HTML on port 3000
+ngrok http 3000     # get a https://xxxx.ngrok.io URL</pre>
+      </div>
+
+      <h2>8.4 What visitors experience</h2>
+      <ul class="steps-list">
+        <li>They open your portfolio at <code>hafsa-portfolio-gcp.web.app</code></li>
+        <li>They see a chat bubble in the bottom right: "Ask about Hafsa"</li>
+        <li>They can <strong>type</strong> a question like "What's her FYP about?" — the AI answers in text</li>
+        <li>They can click the <strong>mic icon</strong>, speak their question, and the AI responds in a natural-sounding voice</li>
+        <li>The voice is powered by Cloud TTS Neural2/Chirp voices — much better quality than browser TTS</li>
+      </ul>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">Demo script for your presentation</div>
+        Open your portfolio live. Ask the voice agent: "Tell me about Hafsa's final year project." Watch the audience react when the AI speaks back in a clear, professional voice — explaining quantum computing and portfolio optimization — from a chatbot grounded in your own data.
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn" onclick="goTo(7)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(9)">Final: Demo checklist →</button>
+      </div>
+    </div>
+
+    <!-- Page 9: Demo checklist -->
+    <div class="page" id="page-9">
+      <h1>Step 9 — Demo checklist + cost summary</h1>
+      <p class="subtitle">You're live. Here's what to show.</p>
+      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+
+      <h2>Pre-demo checklist</h2>
+      <div id="checklist">
+        <div class="check-item"><input type="checkbox" onchange="toggleCheck(this)"> Portfolio site live at <code>.web.app</code> URL</div>
+        <div class="check-item"><input type="checkbox" onchange="toggleCheck(this)"> Visitor counter showing a real number</div>
+        <div class="check-item"><input type="checkbox" onchange="toggleCheck(this)"> Chat bubble visible bottom-right</div>
+        <div class="check-item"><input type="checkbox" onchange="toggleCheck(this)"> Typed chat question works (test it)</div>
+        <div class="check-item"><input type="checkbox" onchange="toggleCheck(this)"> Voice input works (mic grants permission)</div>
+        <div class="check-item"><input type="checkbox" onchange="toggleCheck(this)"> Voice output speaks the response</div>
+        <div class="check-item"><input type="checkbox" onchange="toggleCheck(this)"> GitHub Actions workflow showing green (passed)</div>
+        <div class="check-item"><input type="checkbox" onchange="toggleCheck(this)"> You can make a live push and show CI/CD deploying</div>
+      </div>
+
+      <h2>Demo flow (10 minutes)</h2>
+      <ul class="steps-list">
+        <li><strong>Show the live portfolio</strong> — open <code>hafsa-portfolio-gcp.web.app</code>. Point out HTTPS, global CDN, free hosting.</li>
+        <li><strong>Visitor counter</strong> — refresh the page, show the number incrementing. Explain Firestore → Cloud Functions → JavaScript chain.</li>
+        <li><strong>The chatbot</strong> — type "What is Hafsa's FYP about?" Show the AI answer grounded in real data (not hallucinated).</li>
+        <li><strong>Voice agent</strong> — click the mic, ask "What certifications does she have?" — the AI responds in voice. This is your showstopper.</li>
+        <li><strong>CI/CD</strong> — make a tiny edit to <code>index.html</code>, push to GitHub, open the Actions tab and show the workflow running live.</li>
+        <li><strong>Architecture slide</strong> — show which GCP service handles which part. Mention Firestore free tier, Cloud Functions scale-to-zero, Firebase CDN.</li>
+      </ul>
+
+      <h2>Cost breakdown</h2>
+      <table>
+        <thead>
+          <tr><th>Service</th><th>Free tier</th><th>1-week demo cost</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Firebase Hosting</td>
+            <td>10 GB/month, 360 MB/day transfer</td>
+            <td class="td-free">$0.00</td>
+          </tr>
+          <tr>
+            <td>Cloud Functions</td>
+            <td>2M invocations/month free</td>
+            <td class="td-free">$0.00</td>
+          </tr>
+          <tr>
+            <td>Firestore</td>
+            <td>50K reads, 20K writes/day free</td>
+            <td class="td-free">$0.00</td>
+          </tr>
+          <tr>
+            <td>GitHub Actions</td>
+            <td>2,000 min/month free (public repos)</td>
+            <td class="td-free">$0.00</td>
+          </tr>
+          <tr>
+            <td>Vertex AI Agent Builder</td>
+            <td>~500 chat queries free per month</td>
+            <td class="td-free">$0.00 for demo</td>
+          </tr>
+          <tr>
+            <td>Dialogflow Messenger</td>
+            <td>Text sessions: $0.007 each, Audio: $0.065/min</td>
+            <td style="color:var(--amber)">~$0.07 (few queries)</td>
+          </tr>
+          <tr>
+            <td>Cloud TTS (voice output)</td>
+            <td>4M chars/month free (Standard), 1M free (Neural2)</td>
+            <td class="td-free">$0.00</td>
+          </tr>
+          <tr>
+            <td>GCS (function source)</td>
+            <td>5 GB free storage</td>
+            <td class="td-free">$0.00</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="font-weight:600;color:var(--text)">Total estimated</td>
+            <td class="td-total">~$0.07–$0.10</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">Your $5 covers ~7 months of this setup running live</div>
+        After the demo, you can leave everything running as your actual portfolio. The only ongoing cost is Dialogflow voice queries — a few cents per week if visitors actually use the voice agent.
+      </div>
+
+      <h2>What to say in your blog post (Challenge Step 16)</h2>
+      <p>The Cloud Resume Challenge requires a blog post. Here are angles worth writing about:</p>
+      <ul class="steps-list">
+        <li>Why I chose Firebase Hosting over a Load Balancer — and what the tradeoffs are</li>
+        <li>How Vertex AI Agent Builder uses RAG to ground the chatbot in your own data</li>
+        <li>What CORS is and why my Cloud Function returns <code>Access-Control-Allow-Origin: *</code></li>
+        <li>What happened when tests failed in CI/CD and blocked the deploy</li>
+        <li>The difference between Cloud Functions Gen1 and Gen2</li>
+      </ul>
+
+      <div class="nav-buttons">
+        <button class="btn" onclick="goTo(8)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(0)">Back to overview</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  let current = 0;
+  const total = 10;
+
+  function goTo(n) {
+    document.getElementById('page-' + current).classList.remove('active');
+    document.querySelectorAll('.nav-item')[current].classList.remove('active');
+
+    current = n;
+
+    document.getElementById('page-' + current).classList.add('active');
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems[current].classList.add('active');
+
+    window.scrollTo(0, 0);
+  }
+
+  function copyCode(btn) {
+    const pre = btn.closest('.code-block').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  }
+
+  function toggleCheck(input) {
+    input.closest('.check-item').classList.toggle('checked', input.checked);
+  }
+</script>
+</body>
+</html>
