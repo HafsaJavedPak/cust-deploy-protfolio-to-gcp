@@ -943,6 +943,8 @@ python -m pytest test_main.py -v</pre>
   --max-instances=5</pre>
       </div>
 
+     <p>if you get error, run this commands ERROR: (gcloud.functions.deploy) ResponseError: status=[403], code=[], message=[Could not create Cloud Run service visitor-counter. Permission 'iam.serviceaccounts.actAs' denied on service account xxxxxxx-compute@developer.gserviceaccount.com (or it may not exist).]</p>
+      <pre>gcloud projects add-iam-policy-binding <project-id> --member="user:EMAIL@gmail.com" --role="roles/iam.serviceAccountUser"</pre>
       <p>After deploying, copy the <strong>URL</strong> shown in the output (looks like <code>https://asia-south1-hafsa-portfolio-gcp.cloudfunctions.net/visitor-counter</code>) and paste it into <code>counter.js</code> in your frontend.</p>
 
       <div class="nav-buttons">
