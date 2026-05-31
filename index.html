@@ -1463,5 +1463,34 @@ ngrok http 3000     # get a https://xxxx.ngrok.io URL</pre>
     input.closest('.check-item').classList.toggle('checked', input.checked);
   }
 </script>
+ </script>
+
+    <!-- AI Chatbot -->
+    <link rel="stylesheet" href="https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/themes/df-messenger-default.css">
+    <script src="https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/df-messenger.js"></script>
+    <df-messenger
+      project-id="emerald-energy-483903-f3"
+      agent-id="3ade2d18-60dd-4ef2-bbe8-2017a7cedee9"
+      language-code="en"
+      max-query-length="-1">
+      <df-messenger-chat-bubble
+        chat-title="Portfolio Assistant">
+      </df-messenger-chat-bubble>
+    </df-messenger>
+    <style>
+      df-messenger {
+        z-index: 999;
+        position: fixed;
+        --df-messenger-font-color: #000;
+        --df-messenger-font-family: Google Sans;
+        --df-messenger-chat-background: #f3f6fc;
+        --df-messenger-message-user-background: #d3e3fd;
+        --df-messenger-message-bot-background: #fff;
+        bottom: 16px;
+        right: 16px;
+      }
+    </style>
+  </body>
+</html>
 </body>
 </html>
