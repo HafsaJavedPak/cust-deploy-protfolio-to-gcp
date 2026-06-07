@@ -16,12 +16,16 @@ This guide walks you through deploying a complete tech portfolio on Google Cloud
 | AI chatbot | Vertex AI Agent Builder (Gemini) | GCP native |
 | Voice agent | Dialogflow Messenger + Cloud TTS | Showstopper |
 
+---
+
 ## Architecture
 
 Everything is deployed via CLI commands and the GCP Console. Two GitHub repos — one for frontend and one for backend — each with their own GitHub Actions workflow.
 
 > **Why skip the Load Balancer?**
 > A GCP Load Balancer costs ~$0.60/day ($4.20/week) — nearly your entire $5 budget. Firebase Hosting is actually backed by Google Cloud Storage and gives you free HTTPS + global CDN + a clean `.web.app` URL. For a beginner demo, it's the right call.
+
+---
 
 ## Prerequisites
 
@@ -34,84 +38,72 @@ Everything is deployed via CLI commands and the GCP Console. Two GitHub repos �
 
 ---
 
-## Step 1 — Set Up GCP Project
+## Project Deployment Guide
 
-*~10 minutes · One-time setup*
+### STEP 1 — Set Up Your GCP Project
 
-Everything in GCP lives inside a **project**. Think of it as a folder that groups all your services and tracks costs together.
+#### 1.1 Create a New Project
 
-### 1.1 Login and create project
+1. Go to **console.cloud.google.com** and sign in with your Google account
+2. Click the **project dropdown** at the top of the page (it might say "Select a project" or show an existing project name)
+3. In the popup, click **"New Project"** (top right of the dialog)
+4. Fill in:
+   - **Project name:** `Hafsa Portfolio`
+   - **Project ID:** `hafsa-portfolio-gcp` (edit it if it auto-generated something different — click the pencil icon next to the ID)
+   - Leave **Location** as "No organization" unless you're in a Workspace org
+5. Click **Create**
+6. Wait ~30 seconds, then click the notification bell and click **"Select Project"** to switch into it
 
-```bash
-# Login to Google Cloud
-gcloud auth login
+#### 1.2 Link Billing Account
 
-# Create a new project (change the name to something unique)
-gcloud projects create hafsa-portfolio-gcp --name="Hafsa Portfolio"
+1. In the left sidebar, click the **hamburger menu (☰)** → scroll down to **"Billing"**
+2. If your project has no billing account, you'll see a banner — click **"Link a billing account"**
+3. Select your billing account from the dropdown (the one with your $5 credits)
+4. Click **"Set Account"**
 
-# Set this as your active project
-gcloud config set project hafsa-portfolio-gcp
+#### 1.3 Enable Required APIs
 
-# Check your billing account ID (you'll need this)
-gcloud billing accounts list
-```
+1. Click **☰ → APIs & Services → Library**
+2. Search for and enable each of these one by one — search the name, click the result, click **"Enable"**:
+   - `Cloud Functions API`
+   - `Cloud Build API`
+   - `Cloud Firestore API`
+   - `Cloud Run API`
+   - `Dialogflow API`
+   - `Cloud Text-to-Speech API`
+   - `Cloud Storage API`
+   - `Vertex AI API`
 
-### 1.2 Link billing and enable APIs
+Each one takes 10–30 seconds to enable. You'll see a green checkmark and an "API Enabled" banner when done.
 
-Copy the `ACCOUNT_ID` from the command above (looks like `01A2B3-CD4E56-789F0A`), then run:
+#### 1.4 Create Firestore Database
 
-```bash
-# Link your billing account (paste your actual ID)
-gcloud billing projects link hafsa-portfolio-gcp \
-  --billing-account=YOUR_BILLING_ACCOUNT_ID
+1. Click **☰ → Firestore**
+2. You'll see a "Select a database mode" screen — choose **"Native mode"** and click **"Continue"**
+3. Under **Location**, select **`asia-south1 (Mumbai)`** — closest to Pakistan
+4. Click **"Create Database"**
+5. Wait about a minute for it to provision
 
-# Enable all the services you'll use
-gcloud services enable \
-  cloudfunctions.googleapis.com \
-  cloudbuild.googleapis.com \
-  firestore.googleapis.com \
-  run.googleapis.com \
-  dialogflow.googleapis.com \
-  texttospeech.googleapis.com
-```
+#### 1.5 Create the Visitor Counter Document
 
-> Each API needs to be enabled before you can use it. This takes about 2 minutes and only needs to be done once per project.
+Once Firestore is ready:
 
-### 1.3 Create Firestore database
-
-```bash
-# Create Firestore in Native mode (choose region closest to Pakistan)
-# asia-south1 = Mumbai, best for Pakistan
-gcloud firestore databases create --location=asia-south1
-```
-
-Go to **console.cloud.google.com → Firestore** and create:
-
-1. Collection: `visitors`
-2. Document ID: `counter`
-3. Field: `count` (Number) = `0`
+1. Click **"+ Start collection"**
+2. **Collection ID:** `visitors` → click **Next**
+3. **Document ID:** `counter` (type it manually — don't use "Auto-ID")
+4. Under **"Add a field"**:
+   - Field name: `count`
+   - Type: **Number**
+   - Value: `0`
+5. Click **Save**
 
 ---
 
-## Step 2 — Build the Portfolio Site
+### STEP 2 — Build the Portfolio Site (Files on Your Local Computer)
 
-*~20 minutes · HTML + CSS*
+You do this on your own machine. Open VS Code (or any text editor) and create a folder called `portfolio-frontend`. Inside it, create these files exactly:
 
-### Folder structure
-
-```
-portfolio-frontend/
-├── index.html
-├── style.css
-├── counter.js            ← visitor counter (added in Step 4)
-├── .github/
-│   └── workflows/
-│       └── deploy.yml    ← CI/CD (added in Step 6)
-└── firebase.json         ← Firebase config (added in Step 3)
-```
-
-### `index.html`
-
+#### `index.html`
 ```html
 <!DOCTYPE html>
 <html lang="en">
@@ -164,15 +156,12 @@ portfolio-frontend/
     </div>
   </section>
 
-  <!-- Visitor counter script -->
   <script src="counter.js"></script>
-  <!-- Dialogflow Messenger (chatbot + voice) - added in Step 7 -->
 </body>
 </html>
 ```
 
-### `style.css`
-
+#### `style.css`
 ```css
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -219,36 +208,55 @@ section { margin-bottom: 40px; }
 }
 ```
 
+#### `counter.js`
+Leave the URL blank for now — you'll fill it in after Step 5:
+```javascript
+const FUNCTION_URL =
+  'https://asia-south1-hafsa-portfolio-gcp.cloudfunctions.net/visitor-counter';
+
+async function updateVisitorCount() {
+  try {
+    const response = await fetch(FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) throw new Error('API call failed');
+    const data = await response.json();
+    const countEl = document.getElementById('count');
+    if (countEl) countEl.textContent = data.count.toLocaleString();
+  } catch (error) {
+    console.error('Could not fetch visitor count:', error);
+    const countEl = document.getElementById('count');
+    if (countEl) countEl.textContent = '—';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', updateVisitorCount);
+```
+
 ---
 
-## Step 3 — Deploy to Firebase Hosting
+### STEP 3 — Deploy to Firebase Hosting
 
-*~15 minutes · Free HTTPS + CDN*
+Firebase Hosting is configured through the Firebase Console, which is separate from GCP Console but uses the same Google account.
 
-Firebase Hosting gives you free HTTPS, a global CDN, and a `.web.app` URL — no Load Balancer needed.
+#### 3.1 Open Firebase Console
 
-### 3.1 Install Firebase CLI and login
+1. Go to **console.firebase.google.com**
+2. Click **"Add project"**
+3. Select your existing GCP project: **`hafsa-portfolio-gcp`** from the dropdown
+4. Click **Continue** through the steps (you can turn off Google Analytics or leave it on)
+5. Click **"Create project"** / **"Continue"**
 
-```bash
-npm install -g firebase-tools
-firebase login
-```
+#### 3.2 Enable Hosting
 
-### 3.2 Initialize Firebase in your frontend folder
+1. In the Firebase Console left sidebar, click **"Build" → "Hosting"**
+2. Click **"Get started"**
+3. The wizard will show you CLI commands — **ignore them** (we're using the console approach via GitHub Actions in Step 6). Just click **Next → Next → Continue to console**
 
-```bash
-cd portfolio-frontend
-firebase init hosting
-```
+#### 3.3 Create `firebase.json` on your local machine
 
-When prompted:
-
-1. Select **Use an existing project** → choose `hafsa-portfolio-gcp`
-2. Public directory: **`.`** (just a dot — deploy the current folder)
-3. Configure as single-page app? **No**
-4. Overwrite index.html? **No**
-
-### 3.3 Create `firebase.json`
+In your `portfolio-frontend` folder, create `firebase.json`:
 
 ```json
 {
@@ -275,94 +283,72 @@ When prompted:
 }
 ```
 
-### 3.4 Deploy
+Also create `.firebaserc` in the same folder:
 
-```bash
-firebase deploy --only hosting
-```
-
-> **Your site is live!** Firebase gives you a URL like `hafsa-portfolio-gcp.web.app`. Open it in your browser — your portfolio is live with HTTPS, on Google's global CDN, for free.
-
----
-
-## Step 4 — Visitor Counter (Firestore + JS)
-
-*~15 minutes · Shows live visitor count*
-
-The visitor counter calls your Cloud Function (built in Step 5), which reads and writes to Firestore. The JS in your HTML fetches the count and displays it.
-
-### `counter.js`
-
-```javascript
-// Replace this URL after you deploy the Cloud Function in Step 5
-const FUNCTION_URL =
-  'https://asia-south1-hafsa-portfolio-gcp.cloudfunctions.net/visitor-counter';
-
-async function updateVisitorCount() {
-  try {
-    const response = await fetch(FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    if (!response.ok) throw new Error('API call failed');
-    const data = await response.json();
-    const countEl = document.getElementById('count');
-    if (countEl) countEl.textContent = data.count.toLocaleString();
-  } catch (error) {
-    console.error('Could not fetch visitor count:', error);
-    const countEl = document.getElementById('count');
-    if (countEl) countEl.textContent = '—';
+```json
+{
+  "projects": {
+    "default": "hafsa-portfolio-gcp"
   }
 }
-
-// Run when page loads
-document.addEventListener('DOMContentLoaded', updateVisitorCount);
 ```
 
-> **Note:** The `FUNCTION_URL` will be blank until Step 5. Deploy the Cloud Function first, get the URL, then paste it here and redeploy the frontend.
+#### 3.4 Initial Manual Deploy via Firebase Console (Upload Method)
+
+Since we're avoiding CLI, we'll do the first deploy manually through the console:
+
+1. In Firebase Console → **Hosting** → click **"Add custom domain"** is optional; your default domain is already `hafsa-portfolio-gcp.web.app`
+2. In Firebase Console → **Hosting** → click your site name → **"Release history"** tab
+3. For the very first deploy, you'll need the Firebase CLI just once (on your local machine). Install it: open a terminal and run:
+   ```
+   npm install -g firebase-tools
+   firebase login
+   firebase deploy --only hosting
+   ```
+   from inside your `portfolio-frontend` folder. After this one-time deploy, all future deploys happen via GitHub Actions (Step 6) and you won't need the CLI again.
+
+Your site will be live at `https://hafsa-portfolio-gcp.web.app`
 
 ---
 
-## Step 5 — Cloud Functions (Python API)
+### STEP 4 — Deploy the Cloud Function (Visitor Counter Backend)
 
-*~20 minutes · Serverless backend*
+This is done entirely in the GCP Console using the inline code editor.
 
-Cloud Functions is serverless Python — you write a function, deploy it, and Google runs it on demand. Free tier covers 2 million requests per month.
+#### 4.1 Create a Cloud Storage Bucket for Function Source
 
-### 5.1 Backend folder structure
+1. Go to **console.cloud.google.com** → **☰ → Cloud Storage → Buckets**
+2. Click **"Create"**
+3. **Name:** `hafsa-portfolio-functions-source` (must be globally unique — add your initials if needed)
+4. **Region:** `asia-south1`
+5. Leave all other settings as default
+6. Click **Create**
 
-```
-portfolio-backend/
-├── main.py           ← your Cloud Function
-├── requirements.txt  ← Python dependencies
-└── test_main.py      ← unit tests (required by challenge)
-```
+#### 4.2 Upload Function Source Files
 
-### 5.2 `main.py`
+You need to upload your backend files. First create them locally:
 
+Create a folder called `portfolio-backend` on your computer with these three files:
+
+**`main.py`**
 ```python
 import functions_framework
 from google.cloud import firestore
 from flask import jsonify
 
-# Create Firestore client (uses your project automatically)
 db = firestore.Client()
 
 @functions_framework.http
 def visitor_counter(request):
-    """Increments visitor count in Firestore and returns the new count."""
-    # Handle CORS so your website can call this function
     cors_headers = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
     }
 
-    # Browser sends OPTIONS first (a preflight check) — just say OK
     if request.method == 'OPTIONS':
         return ('', 204, cors_headers)
 
-    # Get the counter document from Firestore
     doc_ref = db.collection('visitors').document('counter')
     doc = doc_ref.get()
 
@@ -372,153 +358,165 @@ def visitor_counter(request):
     else:
         new_count = 1
 
-    # Save the updated count back to Firestore
     doc_ref.set({'count': new_count})
 
     return jsonify({'count': new_count}), 200, cors_headers
 ```
 
-### 5.3 `requirements.txt`
-
+**`requirements.txt`**
 ```
 functions-framework==3.*
 google-cloud-firestore==2.*
 ```
 
-### 5.4 `test_main.py`
+Now zip these two files together. On your computer:
+- **Windows:** select both files → right-click → "Send to" → "Compressed (zipped) folder" → name it `function-source.zip`
+- **Mac:** select both files → right-click → "Compress 2 items" → rename to `function-source.zip`
 
-The Cloud Resume Challenge requires tests. Here's a simple but real test suite:
+**Important:** The zip must contain the files directly (not inside a subfolder). Open it and confirm you see `main.py` and `requirements.txt` at the root level of the zip.
 
-```python
-import unittest
-from unittest.mock import patch, MagicMock
-import main
+Now upload to GCS:
+1. Go back to **Cloud Storage → Buckets → `hafsa-portfolio-functions-source`**
+2. Click **"Upload files"**
+3. Select your `function-source.zip`
+4. Wait for upload to complete
 
-class TestVisitorCounter(unittest.TestCase):
+#### 4.3 Create the Cloud Function
 
-    @patch('main.db')
-    def test_increments_existing_count(self, mock_db):
-        """When document exists, count should go up by 1."""
-        mock_doc = MagicMock()
-        mock_doc.exists = True
-        mock_doc.to_dict.return_value = {'count': 42}
-        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+1. Go to **☰ → Cloud Functions**
+2. Click **"Create Function"**
+3. Fill in **Configuration** tab:
+   - **Environment:** `2nd gen`
+   - **Function name:** `visitor-counter`
+   - **Region:** `asia-south1`
+   - **Trigger type:** `HTTPS`
+   - **Authentication:** `Allow unauthenticated invocations` ← important, tick this
+   - **Require HTTPS:** leave checked
+4. Expand **"Runtime, build, connections and security settings"**:
+   - **Memory:** `256 MiB`
+   - **CPU:** `1`
+   - **Maximum number of instances:** `5`
+5. Click **"Next"**
+6. On the **Code** tab:
+   - **Runtime:** `Python 3.11`
+   - **Entry point:** `visitor_counter`
+   - **Source code:** Change dropdown to `Cloud Storage`
+   - Paste the GCS path or click Browse and select your `function-source.zip` from `hafsa-portfolio-functions-source`
+7. Click **"Deploy"**
 
-        request = MagicMock()
-        request.method = 'POST'
-        response = main.visitor_counter(request)
-        response_data = response[0].get_json()
-        self.assertEqual(response_data['count'], 43)
+Wait 2–3 minutes. You'll see a green checkmark when it's done.
 
-    @patch('main.db')
-    def test_starts_at_one_when_no_document(self, mock_db):
-        """When no document exists yet, count starts at 1."""
-        mock_doc = MagicMock()
-        mock_doc.exists = False
-        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+#### 4.4 Get the Function URL
 
-        request = MagicMock()
-        request.method = 'POST'
-        response = main.visitor_counter(request)
-        response_data = response[0].get_json()
-        self.assertEqual(response_data['count'], 1)
+1. Click on `visitor-counter` in the functions list
+2. Go to the **"Trigger"** tab
+3. Copy the **Trigger URL** — it looks like:
+   `https://asia-south1-hafsa-portfolio-gcp.cloudfunctions.net/visitor-counter`
 
-    @patch('main.db')
-    def test_handles_preflight_cors(self, mock_db):
-        """OPTIONS request (CORS preflight) should return 204."""
-        request = MagicMock()
-        request.method = 'OPTIONS'
-        response = main.visitor_counter(request)
-        self.assertEqual(response[1], 204)
+#### 4.5 Update `counter.js`
 
-if __name__ == '__main__':
-    unittest.main()
-```
+Go back to your `portfolio-frontend/counter.js` and confirm/update the `FUNCTION_URL` at the top with the URL you just copied. The URL in the template already matches the expected format, so if your project ID is `hafsa-portfolio-gcp` it should be correct.
 
-### 5.5 Run tests locally first
+#### 4.6 Fix Permissions if You Get a 403 Error
 
-```bash
-cd portfolio-backend
-pip install functions-framework google-cloud-firestore
-python -m pytest test_main.py -v
-```
+If the function returns a 403 when called from the browser:
 
-### 5.6 Deploy the function
-
-```bash
-gcloud functions deploy visitor-counter \
-  --gen2 \
-  --runtime=python311 \
-  --region=asia-south1 \
-  --source=. \
-  --entry-point=visitor_counter \
-  --trigger-http \
-  --allow-unauthenticated \
-  --max-instances=5
-```
-
-**If you get a permissions error** like `Permission 'iam.serviceaccounts.actAs' denied`, run:
-
-```bash
-gcloud projects add-iam-policy-binding <project-id> \
-  --member="user:EMAIL@gmail.com" \
-  --role="roles/iam.serviceAccountUser"
-```
-
-After deploying, copy the **URL** shown in the output (e.g. `https://asia-south1-hafsa-portfolio-gcp.cloudfunctions.net/visitor-counter`) and paste it into `counter.js` in your frontend.
+1. Go to **Cloud Functions → visitor-counter → Permissions tab**
+2. Click **"Add principal"**
+3. **New principal:** `allUsers`
+4. **Role:** `Cloud Functions Invoker`
+5. Click **Save** (you may see a warning about public access — click "Allow public access")
 
 ---
 
-## Step 6 — CI/CD with GitHub Actions
+### STEP 5 — Set Up GitHub Repos and CI/CD
 
-*~20 minutes · Auto-deploy on every push*
+#### 5.1 Create Both GitHub Repos
 
-CI/CD means: whenever you push code to GitHub, it automatically tests and deploys for you.
+1. Go to **github.com** → click the **+** icon → **"New repository"**
+2. Create `portfolio-frontend` — Public, no README
+3. Repeat for `portfolio-backend` — Public, no README
 
-**How it works:**
-1. Push to `portfolio-backend` → GitHub Actions runs Python tests → if tests pass, deploys to Cloud Functions
-2. Push to `portfolio-frontend` → GitHub Actions deploys to Firebase Hosting
+#### 5.2 Push Your Code to GitHub
 
-### 6.1 Create a GCP service account for GitHub
-
-```bash
-# Create the service account
-gcloud iam service-accounts create github-deployer \
-  --display-name="GitHub Actions Deployer"
-
-# Give it permission to deploy Cloud Functions
-gcloud projects add-iam-policy-binding hafsa-portfolio-gcp \
-  --member="serviceAccount:github-deployer@hafsa-portfolio-gcp.iam.gserviceaccount.com" \
-  --role="roles/cloudfunctions.developer"
-
-# Also allow it to use the App Engine default service account
-gcloud iam service-accounts add-iam-policy-binding \
-  hafsa-portfolio-gcp@appspot.gserviceaccount.com \
-  --member="serviceAccount:github-deployer@hafsa-portfolio-gcp.iam.gserviceaccount.com" \
-  --role="roles/iam.serviceAccountUser"
-
-# Download a key file for this service account
-gcloud iam service-accounts keys create github-key.json \
-  --iam-account=github-deployer@hafsa-portfolio-gcp.iam.gserviceaccount.com
-```
-
-> ⚠️ **Never commit `github-key.json` to Git!** Add it to `.gitignore` immediately.
+On your local machine, open a terminal in each folder:
 
 ```bash
-echo "github-key.json" >> .gitignore
+## Frontend
+cd portfolio-frontend
+git init
+git add .
+git commit -m "Initial portfolio site"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/portfolio-frontend.git
+git push -u origin main
+
+## Backend
+cd ../portfolio-backend
+git init
+git add .
+git commit -m "Add visitor counter Cloud Function"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/portfolio-backend.git
+git push -u origin main
 ```
 
-### 6.2 Add secrets to GitHub
+#### 5.3 Create a Service Account in GCP Console
 
-Go to each GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**:
+1. Go to **GCP Console → ☰ → IAM & Admin → Service Accounts**
+2. Click **"+ Create Service Account"**
+3. **Name:** `github-deployer`
+4. **ID:** will auto-fill as `github-deployer`
+5. Click **"Create and Continue"**
+6. **Grant roles** — click "Add another role" for each:
+   - `Cloud Functions Developer`
+   - `Cloud Run Developer`
+   - `Storage Object Admin`
+   - `Service Account User`
+7. Click **"Continue"** → **"Done"**
 
-- In `portfolio-backend`: add secret `GCP_SA_KEY` = paste the entire contents of `github-key.json`
-- In `portfolio-frontend`: add secret `GCP_SA_KEY` = same key. Also add `FIREBASE_TOKEN` = output of `firebase login:ci`
+#### 5.4 Create and Download Service Account Key
 
-### 6.3 Backend CI/CD workflow
+1. Click on `github-deployer` in the service accounts list
+2. Go to the **"Keys"** tab
+3. Click **"Add Key" → "Create new key"**
+4. Select **JSON** → click **"Create"**
+5. A file `hafsa-portfolio-gcp-xxxxxxxx.json` downloads automatically — this is your `GCP_SA_KEY`
+
+**Keep this file secure — never commit it to Git.**
+
+#### 5.5 Get Firebase Token
+
+In your terminal:
+```bash
+firebase login:ci
+```
+A browser window opens. Authenticate with your Google account. Copy the token printed in the terminal — this is your `FIREBASE_TOKEN`.
+
+#### 5.6 Add Secrets to GitHub Repos
+
+**For `portfolio-backend`:**
+
+1. Go to **github.com/YOUR_USERNAME/portfolio-backend**
+2. Click **Settings → Secrets and variables → Actions**
+3. Click **"New repository secret"**
+4. **Name:** `GCP_SA_KEY`
+5. **Value:** open the JSON key file you downloaded, select all the text, paste it here
+6. Click **"Add secret"**
+
+**For `portfolio-frontend`:**
+
+1. Go to **github.com/YOUR_USERNAME/portfolio-frontend → Settings → Secrets → Actions**
+2. Add `GCP_SA_KEY` (same JSON content)
+3. Add another secret:
+   - **Name:** `FIREBASE_TOKEN`
+   - **Value:** the token from `firebase login:ci`
+
+#### 5.7 Create CI/CD Workflow Files
+
+**In `portfolio-backend`**, create `.github/workflows/deploy.yml`:
 
 ```yaml
-# portfolio-backend/.github/workflows/deploy.yml
 name: Deploy backend
 on:
   push:
@@ -538,7 +536,6 @@ jobs:
       - name: Install dependencies
         run: pip install functions-framework google-cloud-firestore pytest
 
-      # If any test fails, deployment stops here
       - name: Run tests
         run: python -m pytest test_main.py -v
 
@@ -556,10 +553,52 @@ jobs:
           entry_point: visitor_counter
 ```
 
-### 6.4 Frontend CI/CD workflow
+Also add `test_main.py` to your `portfolio-backend` folder:
+
+```python
+import unittest
+from unittest.mock import patch, MagicMock
+import main
+
+class TestVisitorCounter(unittest.TestCase):
+
+    @patch('main.db')
+    def test_increments_existing_count(self, mock_db):
+        mock_doc = MagicMock()
+        mock_doc.exists = True
+        mock_doc.to_dict.return_value = {'count': 42}
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        request = MagicMock()
+        request.method = 'POST'
+        response = main.visitor_counter(request)
+        response_data = response[0].get_json()
+        self.assertEqual(response_data['count'], 43)
+
+    @patch('main.db')
+    def test_starts_at_one_when_no_document(self, mock_db):
+        mock_doc = MagicMock()
+        mock_doc.exists = False
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        request = MagicMock()
+        request.method = 'POST'
+        response = main.visitor_counter(request)
+        response_data = response[0].get_json()
+        self.assertEqual(response_data['count'], 1)
+
+    @patch('main.db')
+    def test_handles_preflight_cors(self, mock_db):
+        request = MagicMock()
+        request.method = 'OPTIONS'
+        response = main.visitor_counter(request)
+        self.assertEqual(response[1], 204)
+
+if __name__ == '__main__':
+    unittest.main()
+```
+
+**In `portfolio-frontend`**, create `.github/workflows/deploy.yml`:
 
 ```yaml
-# portfolio-frontend/.github/workflows/deploy.yml
 name: Deploy frontend
 on:
   push:
@@ -585,37 +624,15 @@ jobs:
           FIREBASE_CLI_EXPERIMENTS: webframeworks
 ```
 
-### 6.5 Test it
-
-```bash
-cd portfolio-backend
-git add .
-git commit -m "Add visitor counter Cloud Function"
-git push origin main
-# Watch it deploy automatically at:
-# github.com/YOUR_USERNAME/portfolio-backend/actions
-```
-
-> **Demo tip:** During your presentation, make a small edit to `index.html`, push to GitHub, then show the GitHub Actions tab auto-deploying. Takes ~90 seconds and always impresses.
+Commit and push both workflow files. Go to **github.com/YOUR_USERNAME/portfolio-backend/actions** — you'll see the workflow run automatically. Green checkmark = success.
 
 ---
 
-## Step 7 — AI Chatbot with Vertex AI Agent Builder
+### STEP 6 — AI Chatbot with Vertex AI Agent Builder
 
-*~25 minutes · Gemini-powered, GCP-native*
+#### 6.1 Create a Knowledge Base Document
 
-Vertex AI Agent Builder is Google's platform for building AI agents powered by Gemini. You give it information about yourself and it creates a chatbot that can answer any question about you — without writing any ML code. It uses RAG (Retrieval-Augmented Generation) to ground answers in your actual data.
-
-### 7.1 Create a data store
-
-1. Go to **console.cloud.google.com → Vertex AI → Agent Builder**
-2. Click **Create data store**
-3. Choose **Website** if your LinkedIn is public, OR **Cloud Storage** to upload a document
-4. If using a document: create `portfolio-info.txt` (see template below), upload to a GCS bucket, and link that bucket
-5. Name the data store: `portfolio-knowledge`
-6. Wait ~5 minutes for indexing
-
-### `portfolio-info.txt` template
+On your local machine, create a plain text file called `portfolio-info.txt`:
 
 ```
 Name: Hafsa
@@ -648,38 +665,84 @@ Featured Projects:
 Skills: AWS, Azure, GCP, Python, Cloud Functions, Firestore,
 Docker, SQL, data engineering, machine learning, portfolio optimization
 
-Contact: [your LinkedIn or email]
+Contact: [your LinkedIn URL]
 ```
 
-### 7.2 Create the AI agent
+#### 6.2 Upload the Document to Cloud Storage
 
-1. In Agent Builder → **Create app** → choose **Chat**
-2. Name it: `Portfolio Assistant`
-3. Link the data store (`portfolio-knowledge`)
-4. In **Agent settings**, set this system prompt:
+1. Go to **GCP Console → Cloud Storage → Buckets**
+2. Click **"Create"**
+3. **Name:** `hafsa-portfolio-knowledge`
+4. **Region:** `asia-south1`
+5. Click **Create**
+6. Open the bucket → click **"Upload files"**
+7. Upload `portfolio-info.txt`
 
-```
-You are a helpful portfolio assistant for Hafsa, a cloud and solutions
-architecture engineer. Your job is to answer questions from visitors
-about Hafsa's experience, projects, skills, and background.
+#### 6.3 Create Vertex AI Agent Builder Data Store
 
-Be friendly, concise, and professional. Only answer based on the
-information in the knowledge base. If you don't know something,
-say so honestly and suggest the visitor contact Hafsa directly.
+1. Go to **☰ → Vertex AI → Agent Builder**
+   - If you don't see it, search "Agent Builder" in the top search bar
+2. If prompted, click **"Continue and activate the API"**
+3. Click **"Create data store"**
+4. Select **"Cloud Storage"** as the source type
+5. Click **"Browse"** and navigate to your `hafsa-portfolio-knowledge` bucket
+6. Select `portfolio-info.txt`
+7. Click **"Continue"**
+8. **Data store name:** `portfolio-knowledge`
+9. Keep the ID as auto-generated
+10. Click **"Create"**
+11. Wait 5–10 minutes for indexing. The status will show "Importing" then change to show document count.
 
-Do not make up certifications, projects, or experience that is not
-in the knowledge base.
-```
+#### 6.4 Create the AI Agent (Chat App)
 
-5. Click **Save**, then **Preview** the agent — try asking "What projects has Hafsa worked on?"
-6. Go to **Integrations → Dialogflow Messenger** and copy the embed code
+1. Still in **Agent Builder**, click **"Create app"**
+2. Select **"Chat"**
+3. **App name:** `Portfolio Assistant`
+4. **Company name:** `Hafsa Portfolio`
+5. **Agent location:** `global`
+6. Click **"Continue"**
+7. On the next screen, check the box next to **`portfolio-knowledge`** to link your data store
+8. Click **"Create"**
 
-### 7.3 Add the chatbot to your portfolio
+#### 6.5 Configure the System Prompt
 
-Paste just before `</body>` in `index.html`:
+1. Once the app is created, click on it to open the agent settings
+2. Click **"Agent"** in the left sidebar (inside Agent Builder)
+3. Find the **"Instructions"** or **"Agent goal"** field
+4. Paste this system prompt:
+   ```
+   You are a helpful portfolio assistant for Hafsa, a cloud and solutions
+   architecture engineer. Your job is to answer questions from visitors
+   about Hafsa's experience, projects, skills, and background.
+
+   Be friendly, concise, and professional. Only answer based on the
+   information in the knowledge base. If you don't know something,
+   say so honestly and suggest the visitor contact Hafsa directly.
+
+   Do not make up certifications, projects, or experience that is not
+   in the knowledge base.
+   ```
+5. Click **"Save"**
+
+#### 6.6 Test the Agent
+
+1. In Agent Builder, click **"Preview"** (top right or in the left sidebar)
+2. Type: `What projects has Hafsa worked on?`
+3. You should get an answer based on your `portfolio-info.txt` file
+4. Try: `What certifications does she have?`
+
+#### 6.7 Get the Dialogflow Messenger Embed Code
+
+1. In Agent Builder → your app → click **"Integrations"** in the left sidebar
+2. Find **"Dialogflow Messenger"** and click it
+3. Copy the **Agent ID** shown (looks like a long UUID)
+4. Also copy the full embed code snippet shown on that page
+
+#### 6.8 Add Chatbot to Your Portfolio
+
+Open `index.html` and paste just before `</body>`:
 
 ```html
-<!-- Paste YOUR embed code from Dialogflow Messenger here -->
 <link rel="stylesheet"
   href="https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/themes/df-messenger-default.css">
 <script src="https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/df-messenger.js"></script>
@@ -710,99 +773,84 @@ Paste just before `</body>` in `index.html`:
 </style>
 ```
 
+Replace `YOUR_AGENT_ID_FROM_CONSOLE` with the actual Agent ID you copied.
+
+Commit and push — GitHub Actions will auto-deploy the updated frontend.
+
 ---
 
-## Step 8 — Voice Agent (Dialogflow Messenger + Cloud TTS)
+### STEP 7 — Voice Agent
 
-*~15 minutes · The showstopper feature*
+#### 7.1 Enable Voice in Dialogflow Messenger
 
-Dialogflow Messenger has a built-in voice mode. When a visitor clicks the mic, the browser captures their voice (Web Speech API), sends it as text to your agent, and the response is read aloud using Cloud Text-to-Speech — all built into the same widget from Step 7.
-
-### 8.1 Enable voice in Dialogflow Messenger
-
-1. Go to **Agent Builder → your agent → Integrations → Dialogflow Messenger**
-2. Toggle on **Allow speech**
-3. Under **Text-to-speech voice**, select a neural voice — recommended: `en-US-Neural2-F` (clear, professional) or `en-US-Chirp3-HD-Aoede` (HD quality)
+1. Go back to **Agent Builder → your Portfolio Assistant app → Integrations → Dialogflow Messenger**
+2. Find the **"Speech"** or **"Allow speech"** toggle and turn it **ON**
+3. Under **Text-to-speech voice**, select:
+   - `en-US-Neural2-F` (professional, clear) — recommended
 4. Click **Save**
 
-### 8.2 Updated embed code with voice support
+#### 7.2 Update the Embed Code
 
-```html
-<df-messenger
-  project-id="hafsa-portfolio-gcp"
-  agent-id="YOUR_AGENT_ID"
-  language-code="en"
-  max-query-length="-1">
-  <df-messenger-chat-bubble
-    chat-title="Ask about Hafsa"
-    chat-icon="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/smart_toy/default/24px.svg">
-  </df-messenger-chat-bubble>
-</df-messenger>
-```
+The embed code doesn't change — the mic icon appears automatically in the chat bubble once speech is enabled in the console. Visitors just click the mic icon to speak.
 
-> ⚠️ **Microphone access:** Visitors must grant microphone permission in their browser. This only works over HTTPS (which Firebase Hosting provides) — it won't work on plain `http://` localhost.
-
-### 8.3 Test voice locally with ngrok
-
-```bash
-# Install ngrok from ngrok.com, then:
-npx serve .       # serve your HTML on port 3000
-ngrok http 3000   # get a https://xxxx.ngrok.io URL
-```
-
-### 8.4 What visitors experience
-
-1. They open your portfolio at `hafsa-portfolio-gcp.web.app`
-2. They see a chat bubble in the bottom right: "Ask about Hafsa"
-3. They can **type** a question — the AI answers in text
-4. They can click the **mic icon**, speak their question, and the AI responds in a natural-sounding voice (powered by Cloud TTS Neural2/Chirp voices)
-
-> **Demo script:** Open your portfolio live. Ask the voice agent: *"Tell me about Hafsa's final year project."* Watch the audience react when the AI speaks back in a clear, professional voice — explaining quantum computing and portfolio optimization — from a chatbot grounded in your own data.
+One important note: microphone access **only works over HTTPS**. Firebase Hosting already gives you HTTPS, so your live site at `hafsa-portfolio-gcp.web.app` will work perfectly.
 
 ---
 
-## Step 9 — Demo Checklist & Cost Summary
+### STEP 8 — Final Checks
 
-### Pre-demo checklist
+#### Verify Everything in the Console
 
-- [ ] Portfolio site live at `.web.app` URL
-- [ ] Visitor counter showing a real number
-- [ ] Chat bubble visible bottom-right
-- [ ] Typed chat question works (test it)
-- [ ] Voice input works (mic grants permission)
-- [ ] Voice output speaks the response
-- [ ] GitHub Actions workflow showing green (passed)
-- [ ] You can make a live push and show CI/CD deploying
+Go through each service and confirm:
 
-### Demo flow (10 minutes)
+**Firebase Hosting:**
+- **console.firebase.google.com → Hosting** → should show your site URL and latest deployment timestamp
 
-1. **Show the live portfolio** — open `hafsa-portfolio-gcp.web.app`. Point out HTTPS, global CDN, free hosting.
-2. **Visitor counter** — refresh the page, show the number incrementing. Explain the Firestore → Cloud Functions → JavaScript chain.
-3. **The chatbot** — type "What is Hafsa's FYP about?" Show the AI answer grounded in real data (not hallucinated).
-4. **Voice agent** — click the mic, ask "What certifications does she have?" — the AI responds in voice. This is your showstopper.
-5. **CI/CD** — make a tiny edit to `index.html`, push to GitHub, open the Actions tab and show the workflow running live.
-6. **Architecture** — explain which GCP service handles which part. Mention Firestore free tier, Cloud Functions scale-to-zero, Firebase CDN.
+**Cloud Functions:**
+- **GCP Console → Cloud Functions → visitor-counter** → Status should show a green checkmark
+- Click the function → **"Testing" tab** → click "Test the function" with method POST → you should get `{"count": 1}` back
 
-### Cost breakdown
+**Firestore:**
+- **GCP Console → Firestore** → `visitors` collection → `counter` document → `count` field should be incrementing each time the function is tested
 
-| Service | Free tier | 1-week demo cost |
-|---|---|---|
-| Firebase Hosting | 10 GB/month, 360 MB/day transfer | $0.00 |
-| Cloud Functions | 2M invocations/month | $0.00 |
-| Firestore | 50K reads, 20K writes/day | $0.00 |
-| GitHub Actions | 2,000 min/month (public repos) | $0.00 |
-| Vertex AI Agent Builder | ~500 chat queries/month | $0.00 for demo |
-| Dialogflow Messenger | Text: $0.007/session, Audio: $0.065/min | ~$0.07 |
-| Cloud TTS | 4M chars/month (Standard), 1M (Neural2) | $0.00 |
-| GCS (function source) | 5 GB free storage | $0.00 |
-| **Total estimated** | | **~$0.07–$0.10** |
+**GitHub Actions:**
+- **github.com/YOUR_USERNAME/portfolio-backend/actions** → latest run should show green
+- **github.com/YOUR_USERNAME/portfolio-frontend/actions** → same
 
-> Your $5 covers ~7 months of this setup running live. The only ongoing cost is Dialogflow voice queries — a few cents per week if visitors actually use the voice agent.
+**Agent Builder:**
+- Go to your agent's **Preview** and ask it a question — confirm it responds from your data
 
-### Blog post ideas (Challenge Step 16)
+**Live site:**
+- Open `https://hafsa-portfolio-gcp.web.app`
+- Visitor counter should show a number (not `—`)
+- Chat bubble should appear in the bottom right
+- Click chat, ask a question — AI should respond
+- Click the mic icon, speak — AI should respond in voice
 
-- Why I chose Firebase Hosting over a Load Balancer — and what the tradeoffs are
-- How Vertex AI Agent Builder uses RAG to ground the chatbot in your own data
-- What CORS is and why my Cloud Function returns `Access-Control-Allow-Origin: *`
-- What happened when tests failed in CI/CD and blocked the deploy
-- The difference between Cloud Functions Gen1 and Gen2
+---
+
+## Quick Reference — Where Everything Lives in the Console
+
+| What you need to do | Where to go |
+|---|---|
+| Check function logs | Cloud Functions → visitor-counter → Logs tab |
+| See Firestore data | Firestore → visitors → counter |
+| See hosting deployments | Firebase Console → Hosting |
+| Edit AI agent | Vertex AI → Agent Builder → your app |
+| Check billing | Billing → Reports |
+| Add IAM permissions | IAM & Admin → IAM |
+| Service account keys | IAM & Admin → Service Accounts |
+
+---
+
+## Common Issues and Fixes
+
+**Visitor counter shows `—`:** The Cloud Function URL in `counter.js` is wrong or the function isn't deployed yet. Go to Cloud Functions → visitor-counter → Trigger tab to verify the exact URL.
+
+**Function returns 403:** The `allUsers` invoker permission wasn't set. Go to Cloud Functions → visitor-counter → Permissions → Add principal → `allUsers` → Cloud Functions Invoker.
+
+**GitHub Actions failing:** Check that the `GCP_SA_KEY` secret contains the complete JSON (including the opening `{` and closing `}`), and that the service account has the right roles.
+
+**Chatbot not appearing:** The `agent-id` in the embed code is wrong. Go back to Agent Builder → Integrations → Dialogflow Messenger and re-copy the exact agent ID.
+
+**Voice not working on localhost:** Expected — it only works on HTTPS. Test on your live `web.app` URL.
